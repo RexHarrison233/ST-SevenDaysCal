@@ -35,6 +35,10 @@ const LINE_STAGE_STEPS = Object.freeze({
     '收束': 4,
 });
 
+// ST 的自动续写在最终合并楼层上可能使用 continue / appendFinal。
+// 这些类型与 normal 一样代表一次已完成的正文；重掷、滑动和静默生成仍由各自流程处理。
+const AUTO_LINE_MESSAGE_TYPES = new Set(['normal', 'continue', 'appendFinal']);
+
 // 阶段文字已承担可访问的状态语义；四格只是本地视觉刻度，不伪装成百分比进度。
 const lineStageMeterHtml = (stage, color) => {
     const faded = stage === '淡出';
@@ -282,10 +286,11 @@ export function createLinesFeature(env = {}) {
     const onMessageReceived = ({ messageId, type } = {}) => {
         if (!env.pluginEnabled?.() || env.getSettings?.().linesEnabled === false) return false;
         const mid = Number(messageId);
+        const messageType = String(type || '');
         const chatId = env.chatId?.();
         const chat = env.chat?.() || [];
         const floor = chat[mid];
-        if (!Number.isInteger(mid) || mid !== chat.length - 1 || !floor || floor.is_user || floor.is_system || !String(floor.mes || '').trim() || String(type || '') !== 'normal') return false;
+        if (!Number.isInteger(mid) || mid !== chat.length - 1 || !floor || floor.is_user || floor.is_system || !String(floor.mes || '').trim() || !AUTO_LINE_MESSAGE_TYPES.has(messageType)) return false;
         if (mid <= lifecycle.lastSeenMaxMesId) return false;
         if (lifecycle.consumePendingReroll() || lifecycle.pendingSwipeGen?.mesId === mid) {
             lifecycle.consumePendingSwipe(mid);
@@ -293,7 +298,7 @@ export function createLinesFeature(env = {}) {
         }
         const saved = freezeLineStore(env.readSaved?.() || { raw: env.readRaw?.() || '', ts: null });
         return lifecycle.registerFloor({
-            chatId, messageId: mid, type: 'normal', cacheKey: env.cacheKey?.(), boundaryEpoch: env.boundaryEpoch?.(),
+            chatId, messageId: mid, type: messageType, cacheKey: env.cacheKey?.(), boundaryEpoch: env.boundaryEpoch?.(),
             linesBaseline: saved,
         });
     };
