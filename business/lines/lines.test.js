@@ -1089,6 +1089,22 @@ test('automatic line success toast is emitted only for an updated generation res
     }
 });
 
+test('automatic lines accept completed continuation types but reject non-final generation types', async () => {
+    for (const type of ['normal', 'continue', 'appendFinal']) {
+        const harness = automaticLinesFeature('updated');
+        assert.equal(harness.feature.onMessageReceived({ messageId: 0, type }), true, type);
+        await harness.feature.onCharacterRendered({ messageId: 0, type });
+        assert.equal(harness.calls(), 1, type);
+    }
+
+    for (const type of ['swipe', 'regenerate', 'quiet', 'impersonate', 'command', 'extension']) {
+        const harness = automaticLinesFeature('updated');
+        assert.equal(harness.feature.onMessageReceived({ messageId: 0, type }), false, type);
+        await harness.feature.onCharacterRendered({ messageId: 0, type });
+        assert.equal(harness.calls(), 0, type);
+    }
+});
+
 test('date aftermath uses the generation result and repeated same-floor CMR does not call the API twice', async () => {
     const failed = automaticLinesFeature('failed', { mode: 'days' });
     failed.feature.onMessageReceived({ messageId: 0, type: 'normal' });
