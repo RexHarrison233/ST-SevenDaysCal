@@ -2146,7 +2146,7 @@ jQuery(async () => {
     };
     eventSource.on(event_types.MESSAGE_RECEIVED, _stListeners.received);
     if (_stListeners.char) eventSource.removeListener?.(event_types.CHARACTER_MESSAGE_RENDERED, _stListeners.char);
-    _stListeners.char = async (messageId, type) => {
+    _stListeners.char = (messageId, type) => {
         if (!pluginEnabled()) return;   // 插件总关：不补锚点 / 不挂楼内块 / 不推进 / 不生成
         coordinateRuntime?.feature?.onCharacterRendered({ messageId: Number(messageId), type });
         // 锚收藏入口独立于线：不受 linesEnabled 影响，新楼渲染后补按钮
@@ -2157,8 +2157,15 @@ jQuery(async () => {
         // Master switch: linesEnabled=false disables auto-advance + inline block
         if (getSettings().linesEnabled === false) return;
         const mid = Number(messageId);
-        await linesFeature.onCharacterRendered({ messageId: mid, type, autoSuppressed: isAutomationSuppressed(mid, AUTOMATION_MODULES.LINES) });
-        return;
+        const autoSuppressed = isAutomationSuppressed(mid, AUTOMATION_MODULES.LINES);
+        // 自动线推演是后台任务：不要把整段模型请求挂在 ST 的串行渲染事件总线上。
+        // 使用现有聊天边界调度器，切换聊天后尚未启动的任务会自动失效；运行中的任务
+        // 仍由 linesFeature 自身的 owner / revision / baseline 守卫负责取消或拒绝陈旧提交。
+        scheduleForChatBoundary(() => {
+            void linesFeature.onCharacterRendered({ messageId: mid, type, autoSuppressed }).catch(error => {
+                console.error('[构画] 自动推进事件线失败', error);
+            });
+        }, 0);
     };
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, _stListeners.char);
     if (_stListeners.timeTravel) eventSource.removeListener?.(event_types.CHARACTER_MESSAGE_RENDERED, _stListeners.timeTravel);
